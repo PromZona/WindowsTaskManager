@@ -54,7 +54,7 @@ public:
     int cntThreads;
     int parentProcID;
     FILETIME prevPROCuser, prevPROCkernel;
-    ULONGLONG cpuUsage;
+    short cpuUsage;
 };
 
 class Application : public Dronegine
@@ -88,15 +88,14 @@ public:
             }
         }
 
-        if (this->counter >= 50)
+        if (counter > 0.5f)
         {
             updateUsageTime();
-            this->counter = 0;
-            WriteString(2, 2, "LLL", FG_RED);
+            counter = 0.0f;
         }
         else
         {
-            this->counter++;
+            counter += fElapsedtime;
         }
 
         int x = 2, y = 3;
@@ -104,6 +103,7 @@ public:
         WriteString(maxNameSize + x, 1, "|");
         WriteString(maxNameSize + x + 2, 1, "PID");
         WriteString(maxNameSize + x + 10, 1, "|");
+        WriteString(maxNameSize + x + 40, 1, std::to_string(counter));
         FillXByText(0, 2, '-', GetWidth());
         for (int i = 0 + arrayShift; i < this->prcs.size(); i++)
         {
@@ -119,8 +119,13 @@ public:
                 WriteString(x + xShift, y, std::to_string(this->prcs[i].pid));
                 xShift += 6; // 4 max dig number + 2 char of spaces
                 WriteString(x + xShift, y, "|");
-                xShift += numDigits(this->prcs[i].pid);
+                xShift += 5;
+                WriteString(x + xShift, y, std::to_string(this->prcs[i].parentProcID));
+                xShift += 5;
+                WriteString(x + xShift, y, "|");
+                xShift += 5;
                 WriteString(x + xShift, y, std::to_string(this->prcs[i].cpuUsage));
+
                 y++;
             }
         }
@@ -167,18 +172,6 @@ public:
         return a.QuadPart - b.QuadPart;
     }
 
-    ULONGLONG AddTimes(const FILETIME &ftA, const FILETIME &ftB)
-    {
-        LARGE_INTEGER a, b;
-        a.LowPart = ftA.dwLowDateTime;
-        a.HighPart = ftA.dwHighDateTime;
-
-        b.LowPart = ftB.dwLowDateTime;
-        b.HighPart = ftB.dwHighDateTime;
-
-        return a.QuadPart + b.QuadPart;
-    }
-
     void updateUsageTime()
     {
         FILETIME CPUidle, CPUkernel, CPUuser;
@@ -204,7 +197,7 @@ public:
             ULONGLONG nTotalProc = ftProcKernelDiff + ftProcUserDiff;
 
             short CpuUsage = (short)((100.0 * nTotalProc) / nTotalSys);
-            prcs[i].cpuUsage = CpuUsage;
+            prcs[i].cpuUsage = ((CpuUsage > 100) || (CpuUsage < 0)) ? 0 : CpuUsage;
 
             prcs[i].prevPROCuser = PROCuser;
             prcs[i].prevPROCkernel = PROCkernel;
@@ -220,7 +213,7 @@ private:
     int maxNameSize = 0;
     std::vector<process> prcs;
     FILETIME prevCPUuser, prevCPUkernel;
-    int counter = 0;
+    float counter = 0;
 };
 
 int main()
