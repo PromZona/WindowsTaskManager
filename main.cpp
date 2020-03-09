@@ -37,6 +37,7 @@ public:
         ZeroMemory(&prevPROCuser, sizeof(FILETIME));
         ZeroMemory(&prevPROCkernel, sizeof(FILETIME));
         cpuUsage = 0;
+        ramUsage = 0;
     }
 
     std::string GetProcessInfo()
@@ -55,6 +56,7 @@ public:
     int parentProcID;
     FILETIME prevPROCuser, prevPROCkernel;
     short cpuUsage;
+    size_t ramUsage;
 };
 
 class Application : public Dronegine
@@ -91,6 +93,7 @@ public:
         if (counter > 0.5f)
         {
             updateUsageTime();
+            updateRAMUsage();
             counter = 0.0f;
         }
         else
@@ -125,6 +128,10 @@ public:
                 WriteString(x + xShift, y, "|");
                 xShift += 5;
                 WriteString(x + xShift, y, std::to_string(this->prcs[i].cpuUsage));
+                xShift += 5;
+                WriteString(x + xShift, y, "|");
+                xShift += 5;
+                WriteString(x + xShift, y, std::to_string(this->prcs[i].ramUsage));
 
                 y++;
             }
@@ -205,6 +212,21 @@ public:
         }
         this->prevCPUkernel = CPUkernel;
         this->prevCPUuser = CPUuser;
+    }
+
+    void updateRAMUsage()
+    {
+        for (int i = 0; i < prcs.size(); i++)
+        {
+            PROCESS_MEMORY_COUNTERS pmc;
+            HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, true, prcs[i].pid);
+
+            if (GetProcessMemoryInfo(hProcess, &pmc, sizeof(pmc)))
+            {
+                prcs[i].ramUsage = (pmc.WorkingSetSize);
+            }
+            CloseHandle(hProcess);
+        }
     }
 
 private:
