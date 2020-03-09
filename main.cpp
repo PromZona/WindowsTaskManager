@@ -6,11 +6,29 @@
 #include <Psapi.h>
 #include <pdh.h>
 #include <vector>
+#include <algorithm>
 
 #define KEY_UP 0x26
 #define KEY_DOWN 0x28
 #define KEY_LEFT 0x25
 #define KEY_RIGHT 0x27
+#define KEY_C 0x43
+#define KEY_I 0x49
+#define KEY_N 0x4E
+#define KEY_R 0x52
+#define KEY_M 0x4D
+
+#define FLAT 0
+#define TREE 1
+
+#define ID_SORT 0
+#define CPU_SORT 1
+#define RAM_SORT 2
+#define NAME_SORT 3
+
+#define RAM_SHOW_BYTES 0
+#define RAM_SHOW_KB 1
+#define RAM_SHOW_MB 2
 
 int numDigits(int number)
 {
@@ -59,6 +77,47 @@ public:
     size_t ramUsage;
 };
 
+bool cmpPrcName(process pr1, process pr2)
+{
+    return (pr1.name.compare(pr2.name) > 0);
+}
+
+bool cmpPrcID(process pr1, process pr2)
+{
+    return (pr1.pid > pr2.pid);
+}
+
+bool cmpPrcCPU(process pr1, process pr2)
+{
+    return (pr1.cpuUsage > pr2.cpuUsage);
+}
+
+bool cmpPrcRAM(process pr1, process pr2)
+{
+    return (pr1.ramUsage > pr2.ramUsage);
+}
+
+///
+bool rcmpPrcName(process pr1, process pr2)
+{
+    return (pr1.name.compare(pr2.name) < 0);
+}
+
+bool rcmpPrcID(process pr1, process pr2)
+{
+    return (pr1.pid < pr2.pid);
+}
+
+bool rcmpPrcCPU(process pr1, process pr2)
+{
+    return (pr1.cpuUsage < pr2.cpuUsage);
+}
+
+bool rcmpPrcRAM(process pr1, process pr2)
+{
+    return (pr1.ramUsage < pr2.ramUsage);
+}
+
 class Application : public Dronegine
 {
 public:
@@ -73,6 +132,48 @@ public:
     {
     }
     virtual bool Update(float fElapsedtime)
+    {
+        this->sortingUpdateTimer += fElapsedtime;
+        appInput();
+
+        if (updateProcessesTimer > 10.0f)
+        {
+            showProcessInformation();
+            updateUsageTime();
+            updateRAMUsage();
+            procSort();
+            updateUsageTimer = 0.0f;
+            updateProcessesTimer = 0.0f;
+        }
+        else
+        {
+            updateProcessesTimer += fElapsedtime;
+        }
+
+        if (updateUsageTimer > 1.0f)
+        {
+            updateUsageTime();
+            updateRAMUsage();
+            procSort();
+            updateUsageTimer = 0.0f;
+        }
+        else
+        {
+            updateUsageTimer += fElapsedtime;
+        }
+
+        if (showState == FLAT)
+        {
+            flatProcessListShow();
+        }
+        else if (showState == TREE)
+        {
+        }
+
+        return true;
+    }
+
+    void appInput()
     {
         if (m_keys[KEY_UP].bHeld == true)
         {
@@ -90,24 +191,81 @@ public:
             }
         }
 
-        if (counter > 0.5f)
+        if (this->sortingUpdateTimer >= 0.5f)
         {
-            updateUsageTime();
-            updateRAMUsage();
-            counter = 0.0f;
-        }
-        else
-        {
-            counter += fElapsedtime;
-        }
+            if (m_keys[KEY_R].bHeld == true)
+            {
+                if (sortState == RAM_SORT)
+                {
+                    bigToLittle = !bigToLittle;
+                }
+                else
+                {
+                    sortState = RAM_SORT;
+                }
+                procSort();
+                this->sortingUpdateTimer = 0;
+            }
 
+            if (m_keys[KEY_C].bHeld == true)
+            {
+                if (sortState == CPU_SORT)
+                {
+                    bigToLittle = !bigToLittle;
+                }
+                else
+                {
+                    sortState = CPU_SORT;
+                }
+                procSort();
+                this->sortingUpdateTimer = 0;
+            }
+
+            if (m_keys[KEY_N].bHeld == true)
+            {
+                if (sortState == NAME_SORT)
+                {
+                    bigToLittle = !bigToLittle;
+                }
+                else
+                {
+                    sortState = NAME_SORT;
+                }
+                procSort();
+                this->sortingUpdateTimer = 0;
+            }
+
+            if (m_keys[KEY_I].bHeld == true)
+            {
+                if (sortState == ID_SORT)
+                {
+                    bigToLittle = !bigToLittle;
+                }
+                else
+                {
+                    sortState = ID_SORT;
+                }
+                procSort();
+                this->sortingUpdateTimer = 0;
+            }
+
+            if (m_keys[KEY_M].bHeld == true)
+            {
+                if (ramShowType == RAM_SHOW_BYTES)
+                    ramShowType = RAM_SHOW_KB;
+                else if (ramShowType == RAM_SHOW_KB)
+                    ramShowType = RAM_SHOW_MB;
+                else if (ramShowType == RAM_SHOW_MB)
+                    ramShowType = RAM_SHOW_BYTES;
+                this->sortingUpdateTimer = 0;
+            }
+        }
+    }
+
+    void flatProcessListShow()
+    {
         int x = 2, y = 3;
-        WriteString(10, 1, "PROCESS NAME");
-        WriteString(maxNameSize + x, 1, "|");
-        WriteString(maxNameSize + x + 2, 1, "PID");
-        WriteString(maxNameSize + x + 10, 1, "|");
-        WriteString(maxNameSize + x + 40, 1, std::to_string(counter));
-        FillXByText(0, 2, '-', GetWidth());
+        flatUIshow(x);
         for (int i = 0 + arrayShift; i < this->prcs.size(); i++)
         {
             if (y <= GetHeight())
@@ -122,25 +280,141 @@ public:
                 WriteString(x + xShift, y, std::to_string(this->prcs[i].pid));
                 xShift += 6; // 4 max dig number + 2 char of spaces
                 WriteString(x + xShift, y, "|");
+
                 xShift += 5;
                 WriteString(x + xShift, y, std::to_string(this->prcs[i].parentProcID));
                 xShift += 5;
                 WriteString(x + xShift, y, "|");
+
                 xShift += 5;
-                WriteString(x + xShift, y, std::to_string(this->prcs[i].cpuUsage));
+                COLOUR cl = FG_GREEN;
+                if (this->prcs[i].cpuUsage > 25)
+                {
+                    cl = FG_YELLOW;
+                }
+                if (this->prcs[i].cpuUsage > 50)
+                {
+                    cl = FG_MAGENTA;
+                }
+                if (this->prcs[i].cpuUsage > 75)
+                {
+                    cl = FG_RED;
+                }
+                WriteString(x + xShift, y, std::to_string(this->prcs[i].cpuUsage), cl);
                 xShift += 5;
                 WriteString(x + xShift, y, "|");
+
                 xShift += 5;
-                WriteString(x + xShift, y, std::to_string(this->prcs[i].ramUsage));
+                cl = FG_GREEN;
+                if (this->prcs[i].ramUsage / (1024 * 1024) > 100)
+                {
+                    cl = FG_YELLOW;
+                }
+                if (this->prcs[i].ramUsage / (1024 * 1024) > 500)
+                {
+                    cl = FG_MAGENTA;
+                }
+                if (this->prcs[i].ramUsage / (1024 * 1024) > 1000)
+                {
+                    cl = FG_RED;
+                }
+                size_t ram = this->prcs[i].ramUsage;
+                if (ramShowType == RAM_SHOW_KB)
+                    ram = ram / 1024;
+                else if (ramShowType == RAM_SHOW_MB)
+                    ram = ram / (1024 * 1024);
+                WriteString(x + xShift, y, std::to_string(ram), cl);
 
                 y++;
             }
         }
-        return true;
+    }
+
+    void flatUIshow(int x)
+    {
+        COLOUR cl = FG_WHITE;
+        if (bigToLittle)
+        {
+            cl = FG_GREEN;
+        }
+        else
+        {
+            cl = FG_RED;
+        }
+
+        if (this->sortState == NAME_SORT)
+            WriteString(10, 1, "PROCESS NAME", cl);
+        else
+            WriteString(10, 1, "PROCESS NAME");
+        WriteString(maxNameSize + x, 1, "|");
+
+        if (this->sortState == ID_SORT)
+            WriteString(maxNameSize + x + 4, 1, "PID", cl);
+        else
+            WriteString(maxNameSize + x + 4, 1, "PID");
+        WriteString(maxNameSize + x + 10, 1, "|");
+
+        WriteString(maxNameSize + x + 12, 1, "PAR PID");
+        WriteString(maxNameSize + x + 20, 1, "|");
+
+        if (this->sortState == CPU_SORT)
+            WriteString(maxNameSize + x + 24, 1, "CPU", cl);
+        else
+            WriteString(maxNameSize + x + 24, 1, "CPU");
+        WriteString(maxNameSize + x + 30, 1, "|");
+
+        if (this->sortState == RAM_SORT)
+            WriteString(maxNameSize + x + 36, 1, "RAM", cl);
+        else
+            WriteString(maxNameSize + x + 36, 1, "RAM");
+
+        // WriteString(maxNameSize + x + 40, 1, std::to_string(sortingUpdateTimer));
+        FillXByText(0, 2, '-', GetWidth());
+    }
+
+    void procSort()
+    {
+        if (bigToLittle)
+        {
+            switch (sortState)
+            {
+            case NAME_SORT:
+                std::sort(prcs.begin(), prcs.end(), cmpPrcName);
+                break;
+            case ID_SORT:
+                std::sort(prcs.begin(), prcs.end(), cmpPrcID);
+                break;
+            case RAM_SORT:
+                std::sort(prcs.begin(), prcs.end(), cmpPrcRAM);
+                break;
+            case CPU_SORT:
+                std::sort(prcs.begin(), prcs.end(), cmpPrcCPU);
+                break;
+            }
+        }
+        else
+        {
+            switch (sortState)
+            {
+            case NAME_SORT:
+                std::sort(prcs.begin(), prcs.end(), rcmpPrcName);
+                break;
+            case ID_SORT:
+                std::sort(prcs.begin(), prcs.end(), rcmpPrcID);
+                break;
+            case RAM_SORT:
+                std::sort(prcs.begin(), prcs.end(), rcmpPrcRAM);
+                break;
+            case CPU_SORT:
+                std::sort(prcs.begin(), prcs.end(), rcmpPrcCPU);
+                break;
+            }
+        }
     }
 
     void showProcessInformation()
     {
+        prcs.clear();
         HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
         if (hSnapshot)
         {
@@ -165,6 +439,7 @@ public:
             }
             CloseHandle(hSnapshot);
         }
+        procSort();
     }
 
     ULONGLONG SubtractTimes(const FILETIME &ftA, const FILETIME &ftB)
@@ -230,12 +505,17 @@ public:
     }
 
 private:
-    bool needTopdateProc = true;
+    bool bigToLittle = true;
     int arrayShift = 0;
     int maxNameSize = 0;
     std::vector<process> prcs;
     FILETIME prevCPUuser, prevCPUkernel;
-    float counter = 0;
+    float updateUsageTimer = 0;
+    float updateProcessesTimer = 0;
+    float sortingUpdateTimer = 0;
+    int showState = FLAT;
+    int sortState = RAM_SORT;
+    int ramShowType = RAM_SHOW_KB;
 };
 
 int main()

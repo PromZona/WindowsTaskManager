@@ -147,18 +147,6 @@ public:
 		}
 	}
 
-	void WriteString(int Xpos, int Ypos, TCHAR* TextYouWant, int textSize, short color = FG_WHITE)
-	{
-		if (Xpos >= 0 && Ypos >= 0 && Xpos <= SizeX && Ypos <= SizeY && Xpos + textSize <= SizeX)
-		{
-			for (int i = 0; i < textSize; i++)
-			{
-				ScreenBuffer[Ypos * SizeX + Xpos + i].Char.AsciiChar = TextYouWant[i];
-				ScreenBuffer[Ypos * SizeX + Xpos + i].Attributes = color;
-			}
-		}
-	}
-
 	void FillXByText(int Xpos, int Ypos, char symbol, int count, short color = FG_WHITE)
 	{
 		if (Xpos >= 0 && Ypos >= 0 && Xpos <= SizeX && Ypos <= SizeY && Xpos + count <= SizeX)
