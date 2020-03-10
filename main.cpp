@@ -146,8 +146,13 @@ public:
 
             if (m_keys[KEY_T].bHeld == true)
             {
-                if(showState == FLAT) showState = TREE;
-                else if(showState == TREE) showState = FLAT;
+                if (showState == FLAT)
+                    showState = TREE;
+                else if (showState == TREE)
+                {
+                    showProcessInformation();
+                    showState = FLAT;
+                }
                 procSort();
                 this->sortingUpdateTimer = 0;
             }
@@ -160,7 +165,7 @@ public:
         flatUIshow(x);
         for (int i = 0 + arrayShift; i < this->prcs.size(); i++)
         {
-            if (y <= GetHeight())
+            if (y <= GetHeight() - 4)
             {
                 int columnWidth = maxNameSize;
                 int xShift = 0;
@@ -262,6 +267,23 @@ public:
 
         //WriteString(maxNameSize + x + 42, 1, std::to_string(fathers.size()));
         FillXByText(0, 2, '-', GetWidth());
+
+        int textShift = 1;
+        WriteString(textShift, GetHeight() - 1, "R - sort by RAM");
+        WriteString(textShift, GetHeight() - 2, "C - sort by CPU");
+        textShift += 20;
+
+        WriteString(textShift, GetHeight() - 1, "N - sort by Name");
+        WriteString(textShift, GetHeight() - 2, "I - sort by PID");
+        textShift += 22;
+
+        WriteString(textShift, GetHeight() - 1, "M - B -> KB -> MB");
+        WriteString(textShift, GetHeight() - 2, "T - show as tree");
+        textShift += 22;
+
+        WriteString(textShift, GetHeight() - 1, "Arrow UP - scroll up");
+        WriteString(textShift, GetHeight() - 2, "Arrow DOWN - scroll down");
+        FillXByText(0, GetHeight() - 3, '-', GetWidth());
     }
 
     void treeProcessListShow()
@@ -270,7 +292,7 @@ public:
         flatUIshow(x);
         for (int i = 0 + arrayShift; i < prcs.size(); i++)
         {
-            if (y < GetHeight())
+            if (y <= GetHeight() - 4)
             {
                 int columnWidth = maxNameSize;
                 int xShift = 0;
@@ -436,14 +458,14 @@ public:
         }
         for (int i = 0; i < prcs.size(); i++)
         {
-            for(int j = 0; j < prcs.size(); j++)
+            for (int j = 0; j < prcs.size(); j++)
             {
-                if(prcs[j].pid == prcs[i].parentProcID)
+                if (prcs[j].pid == prcs[i].parentProcID)
                 {
                     break;
                 }
 
-                if (j == prcs.size()-1)
+                if (j == prcs.size() - 1)
                 {
                     fathers.push_back(prcs[i].pid);
                 }
