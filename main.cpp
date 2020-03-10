@@ -1,122 +1,4 @@
-#include <iostream>
-#include "Dronegine.h"
-#include <string>
-#include <tchar.h>
-#include <tlhelp32.h>
-#include <Psapi.h>
-#include <pdh.h>
-#include <vector>
-#include <algorithm>
-
-#define KEY_UP 0x26
-#define KEY_DOWN 0x28
-#define KEY_LEFT 0x25
-#define KEY_RIGHT 0x27
-#define KEY_C 0x43
-#define KEY_I 0x49
-#define KEY_N 0x4E
-#define KEY_R 0x52
-#define KEY_M 0x4D
-
-#define FLAT 0
-#define TREE 1
-
-#define ID_SORT 0
-#define CPU_SORT 1
-#define RAM_SORT 2
-#define NAME_SORT 3
-
-#define RAM_SHOW_BYTES 0
-#define RAM_SHOW_KB 1
-#define RAM_SHOW_MB 2
-
-int numDigits(int number)
-{
-    int digits = 0;
-    if (number < 0)
-        digits = 1; // remove this line if '-' counts as a digit
-    while (number)
-    {
-        number /= 10;
-        digits++;
-    }
-    return digits;
-}
-
-class process
-{
-public:
-    process(std::string str, int p, int cThr, int pPrcId)
-    {
-        name = str;
-        pid = p;
-        cntThreads = cThr;
-        parentProcID = pPrcId;
-        ZeroMemory(&prevPROCuser, sizeof(FILETIME));
-        ZeroMemory(&prevPROCkernel, sizeof(FILETIME));
-        cpuUsage = 0;
-        ramUsage = 0;
-    }
-
-    std::string GetProcessInfo()
-    {
-        std::string buf = name + " | " + std::to_string(pid) + " | " + std::to_string(cntThreads);
-        return buf;
-    }
-
-    ~process()
-    {
-    }
-
-    std::string name;
-    int pid;
-    int cntThreads;
-    int parentProcID;
-    FILETIME prevPROCuser, prevPROCkernel;
-    short cpuUsage;
-    size_t ramUsage;
-};
-
-bool cmpPrcName(process pr1, process pr2)
-{
-    return (pr1.name.compare(pr2.name) > 0);
-}
-
-bool cmpPrcID(process pr1, process pr2)
-{
-    return (pr1.pid > pr2.pid);
-}
-
-bool cmpPrcCPU(process pr1, process pr2)
-{
-    return (pr1.cpuUsage > pr2.cpuUsage);
-}
-
-bool cmpPrcRAM(process pr1, process pr2)
-{
-    return (pr1.ramUsage > pr2.ramUsage);
-}
-
-///
-bool rcmpPrcName(process pr1, process pr2)
-{
-    return (pr1.name.compare(pr2.name) < 0);
-}
-
-bool rcmpPrcID(process pr1, process pr2)
-{
-    return (pr1.pid < pr2.pid);
-}
-
-bool rcmpPrcCPU(process pr1, process pr2)
-{
-    return (pr1.cpuUsage < pr2.cpuUsage);
-}
-
-bool rcmpPrcRAM(process pr1, process pr2)
-{
-    return (pr1.ramUsage < pr2.ramUsage);
-}
+#include "main.h"
 
 class Application : public Dronegine
 {
@@ -131,6 +13,7 @@ public:
     ~Application()
     {
     }
+
     virtual bool Update(float fElapsedtime)
     {
         this->sortingUpdateTimer += fElapsedtime;
@@ -168,6 +51,7 @@ public:
         }
         else if (showState == TREE)
         {
+            treeProcessListShow();
         }
 
         return true;
@@ -257,6 +141,14 @@ public:
                     ramShowType = RAM_SHOW_MB;
                 else if (ramShowType == RAM_SHOW_MB)
                     ramShowType = RAM_SHOW_BYTES;
+                this->sortingUpdateTimer = 0;
+            }
+
+            if (m_keys[KEY_T].bHeld == true)
+            {
+                if(showState == FLAT) showState = TREE;
+                else if(showState == TREE) showState = FLAT;
+                procSort();
                 this->sortingUpdateTimer = 0;
             }
         }
@@ -368,8 +260,84 @@ public:
         else
             WriteString(maxNameSize + x + 36, 1, "RAM");
 
-        // WriteString(maxNameSize + x + 40, 1, std::to_string(sortingUpdateTimer));
+        //WriteString(maxNameSize + x + 42, 1, std::to_string(fathers.size()));
         FillXByText(0, 2, '-', GetWidth());
+    }
+
+    void treeProcessListShow()
+    {
+        int x = 2, y = 3;
+        flatUIshow(x);
+        for (int i = 0 + arrayShift; i < prcs.size(); i++)
+        {
+            if (y < GetHeight())
+            {
+                int columnWidth = maxNameSize;
+                int xShift = 0;
+                if (prcs[i].shift > 0)
+                {
+                    xShift += prcs[i].shift;
+                    WriteString(x, y, std::string(" -", prcs[i].shift) + this->prcs[i].name);
+                }
+                else
+                {
+                    WriteString(x, y, this->prcs[i].name);
+                }
+                WriteString(columnWidth + x, y, "|");
+                xShift = maxNameSize + x;
+
+                xShift += 2;
+                WriteString(x + xShift, y, std::to_string(this->prcs[i].pid));
+                xShift += 6; // 4 max dig number + 2 char of spaces
+                WriteString(x + xShift, y, "|");
+
+                xShift += 5;
+                WriteString(x + xShift, y, std::to_string(this->prcs[i].parentProcID));
+                xShift += 5;
+                WriteString(x + xShift, y, "|");
+
+                xShift += 5;
+                COLOUR cl = FG_GREEN;
+                if (this->prcs[i].cpuUsage > 25)
+                {
+                    cl = FG_YELLOW;
+                }
+                if (this->prcs[i].cpuUsage > 50)
+                {
+                    cl = FG_MAGENTA;
+                }
+                if (this->prcs[i].cpuUsage > 75)
+                {
+                    cl = FG_RED;
+                }
+                WriteString(x + xShift, y, std::to_string(this->prcs[i].cpuUsage), cl);
+                xShift += 5;
+                WriteString(x + xShift, y, "|");
+
+                xShift += 5;
+                cl = FG_GREEN;
+                if (this->prcs[i].ramUsage / (1024 * 1024) > 100)
+                {
+                    cl = FG_YELLOW;
+                }
+                if (this->prcs[i].ramUsage / (1024 * 1024) > 500)
+                {
+                    cl = FG_MAGENTA;
+                }
+                if (this->prcs[i].ramUsage / (1024 * 1024) > 1000)
+                {
+                    cl = FG_RED;
+                }
+                size_t ram = this->prcs[i].ramUsage;
+                if (ramShowType == RAM_SHOW_KB)
+                    ram = ram / 1024;
+                else if (ramShowType == RAM_SHOW_MB)
+                    ram = ram / (1024 * 1024);
+                WriteString(x + xShift, y, std::to_string(ram), cl);
+
+                y++;
+            }
+        }
     }
 
     void procSort()
@@ -410,11 +378,38 @@ public:
                 break;
             }
         }
+
+        if (showState == TREE)
+        {
+            std::vector<process> buf;
+            for (int i = 0; i < fathers.size(); i++)
+            {
+                for (int j = 0; j < prcs.size(); j++) // find father
+                {
+                    if (prcs[j].pid == fathers[i])
+                    {
+                        buf.push_back(prcs[j]);
+                        break;
+                    }
+                }
+
+                for (int j = 0; j < prcs.size(); j++) // find all childs
+                {
+                    if (prcs[j].parentProcID == fathers[i])
+                    {
+                        prcs[j].shift = 2;
+                        buf.push_back(prcs[j]);
+                    }
+                }
+            }
+            prcs = buf;
+        }
     }
 
     void showProcessInformation()
     {
         prcs.clear();
+        fathers.clear();
         HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
         if (hSnapshot)
         {
@@ -438,6 +433,21 @@ public:
                 } while (Process32Next(hSnapshot, &pe32));
             }
             CloseHandle(hSnapshot);
+        }
+        for (int i = 0; i < prcs.size(); i++)
+        {
+            for(int j = 0; j < prcs.size(); j++)
+            {
+                if(prcs[j].pid == prcs[i].parentProcID)
+                {
+                    break;
+                }
+
+                if (j == prcs.size()-1)
+                {
+                    fathers.push_back(prcs[i].pid);
+                }
+            }
         }
         procSort();
     }
@@ -509,6 +519,7 @@ private:
     int arrayShift = 0;
     int maxNameSize = 0;
     std::vector<process> prcs;
+    std::vector<int> fathers;
     FILETIME prevCPUuser, prevCPUkernel;
     float updateUsageTimer = 0;
     float updateProcessesTimer = 0;
@@ -523,6 +534,6 @@ int main()
     Application *app = new Application();
     app->ConstructConsole(120, 50);
     app->Start();
-
+    delete app;
     return 1;
 }
